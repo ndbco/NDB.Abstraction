@@ -1,4 +1,4 @@
-# NDB.Abstraction
+﻿# NDB.Abstraction
 
 Framework-agnostic request and result contracts for modern .NET applications.
 
@@ -29,6 +29,28 @@ Use **NDB.Abstraction** when you need:
   - validation errors
 - A stable DTO contract that rarely breaks
 
+Typical use cases:
+
+- REST APIs
+- Blazor / MVC applications
+- Background workers
+- Client SDKs
+- Admin panels and dashboards
+
+---
+
+## When should I NOT use this?
+
+Do **not** use this library for:
+
+- Database access
+- ORM helpers
+- Business logic
+- Validation frameworks
+- Mapping logic
+
+Those concerns belong in **separate libraries**.
+
 ---
 
 ## Features
@@ -57,20 +79,11 @@ dotnet add package NDB.Abstraction
 or 
 Install-Package NDB.Abstraction
 ```
+---
 
-## Usage
-```List Request Example
-public class SearchVehicleRequest : ListRequest
-{
-    public string? EngineNumber { get; set; }
-}
-```
-
-```Result Example
-public Result<VehicleResponse> Handle(SearchVehicleRequest request)
-{
-    // application logic
-    return Result.Ok(vehicle);
-}
-```
-
+## Usage Example
+- [Requests](src/Requests/README.md)
+- [Results](src/Results/README.md)
+- [Markers](src/Markers/README.md)
+- [Common](src/Common/README.md)
+- [Validation](src/Validation/README.md)
