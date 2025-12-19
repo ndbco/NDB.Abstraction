@@ -2,7 +2,7 @@
 
 public class Result
 {
-    public ResultStatus Status { get; init; }
+    public ResultStatus Status { get; init; } = ResultStatus.Error;
     public string Message { get; init; } = string.Empty;
 
     public bool Succeeded => Status == ResultStatus.Success;
