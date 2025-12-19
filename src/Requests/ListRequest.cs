@@ -1,8 +1,14 @@
 ﻿namespace NDB.Abstraction.Requests;
-
-public class ListRequest
+public sealed class ListRequest
 {
-    public List<FilterRequest> Filters { get; set; } = new();
-    public List<SortRequest> Sorts { get; set; } = new();
-    public PagingRequest Paging { get; set; } = new();
+    public string? Search { get; init; }
+
+    public IReadOnlyList<FilterRequest> Filters { get; init; }
+        = Array.Empty<FilterRequest>();
+
+    public IReadOnlyList<SortRequest> Sorts { get; init; }
+        = Array.Empty<SortRequest>();
+
+    public PagingRequest Paging { get; init; }
+        = new();
 }

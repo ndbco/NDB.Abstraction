@@ -1,17 +1,23 @@
 ﻿namespace NDB.Abstraction.Results;
-
-public class PagedResult<T> : Result
+public sealed class PagedResult<T> : CollectionResult<T>
 {
-    public IReadOnlyList<T> Items { get; init; } = Array.Empty<T>();
-    public PageInfo PageInfo { get; init; } = default!;
-}
+    public PageInfo PageInfo { get; init; } = PageInfo.Empty;
 
-public class PageInfo
-{
-    public int Page { get; init; }
-    public int PageSize { get; init; }
-    public int TotalItems { get; init; }
+    private PagedResult() { }
 
-    public int TotalPages =>
-        (int)Math.Ceiling((double)TotalItems / PageSize);
+    public static PagedResult<T> Ok(
+        IReadOnlyList<T> items,
+        int page,
+        int pageSize,
+        int totalItems,
+        string message = "OK")
+    {
+        return new PagedResult<T>
+        {
+            Status = ResultStatus.Success,
+            Items = items,
+            Message = message,
+            PageInfo = PageInfo.Create(page, pageSize, totalItems)
+        };
+    }
 }

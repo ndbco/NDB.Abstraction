@@ -82,8 +82,8 @@ Install-Package NDB.Abstraction
 ---
 
 ## Usage Example
-- [Requests](src/Requests/README.md)
-- [Results](src/Results/README.md)
-- [Markers](src/Markers/README.md)
-- [Common](src/Common/README.md)
-- [Validation](src/Validation/README.md)
+- [Requests](src/Requests)
+- [Results](src/Results)
+- [Markers](src/Markers)
+- [Common](src/Common)
+- [Validation](src/Validation)

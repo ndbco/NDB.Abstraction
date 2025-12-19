@@ -1,254 +1,335 @@
-# NDB.Abstraction � Results Guide
+﻿# NDB.Abstraction – Results Guide
 
-This document explains how RESULT models in NDB.Abstraction should be used
-in a clear, consistent, and predictable way, including practical examples.
-Result models define HOW the backend communicates outcomes
-(success, failure, validation errors) to clients.
+This document defines the **official, enforced pattern** for using `Result` models
+in **NDB.Abstraction**.
+
+The goal is to ensure all backend responses are:
+
+* **Explicit**
+* **Immutable**
+* **Predictable**
+* **Misuse-resistant**
+
+Result models describe **WHAT happened**, not **HOW it is transported**.
+
+---
 
 ## PURPOSE OF RESULT MODELS
 
-### Result models are used to:
-- Standardize responses across services and APIs
-- Clearly represent success or failure
-- Separate business outcomes from transport protocols (HTTP, gRPC, etc.)
-- Provide predictable response structures for UI and client applications
+### Result models ARE used to:
+
+* Standardize backend outcomes
+* Represent success or failure explicitly
+* Separate business results from transport (HTTP, gRPC, etc.)
+* Provide consistent response shapes for clients
 
 ### Result models are NOT used to:
-- Replace HTTP status codes
-- Perform logging or monitoring
-- Contain business logic
-- Throw exceptions for expected cases
+
+* Replace HTTP status codes
+* Perform logging or monitoring
+* Contain business logic
+* Swallow or replace exceptions
+
+---
+
+## CORE DESIGN RULES (IMPORTANT)
+
+> **All Result types are created ONLY via factory methods.**
+
+### This means:
+
+* ❌ `new Result()`
+* ❌ `new Result<T>()`
+* ❌ `new ListResult<T>()`
+* ❌ `new PagedResult<T>()`
+
+are **NOT allowed**.
+
+This is intentional and enforced to prevent:
+
+* silent success
+* missing status
+* inconsistent state
+
+---
 
 ## BASE RESULT TYPE
-All result types inherit from the same base type.
 
-### Base Result properties:
-- Status : semantic outcome of the operation
-- Message : human-readable message
-- Succeeded : true if Status == Success
+All result types inherit from the same base abstraction.
+
+### Base properties:
+
+* `Status` – semantic outcome of the operation
+* `Message` – human-readable message
+* `Succeeded` – `true` if `Status == Success`
 
 ### ResultStatus values:
-- Success
-- BadRequest
-- NotFound
-- Unauthorized
-- Forbidden
-- Conflict
-- Error
 
-ResultStatus is protocol-agnostic and can be mapped to HTTP,
-gRPC, or any other transport layer.
+* `Success`
+* `BadRequest`
+* `NotFound`
+* `Unauthorized`
+* `Forbidden`
+* `Conflict`
+* `Error`
+
+`ResultStatus` is **transport-agnostic** and can be mapped to HTTP, gRPC, or others.
+
+---
 
 ## RESULT (NON-GENERIC)
 
-Use Result (non-generic) when:
-- The operation does not return data
-- The operation represents a command (create, update, delete)
+Use **Result (non-generic)** when:
 
-### EXAMPLE (SUCCESS):
+* The operation does NOT return data
+* The operation represents a command (create, update, delete, activate)
 
-```code
-return Result.Ok("Vehicle created successfully");
+### SUCCESS
+
+```csharp
+return Result.Ok("Role activated successfully");
 ```
 
-### EXAMPLE (FAILURE):
+### FAILURE
 
-```code
+```csharp
 return Result.Fail(
-    ResultStatus.Conflict,
-    "Vehicle already exists"
-);
+    ResultStatus.NotFound,
+    "Role not found");
 ```
+
+### Internal note
+
+`Result.Ok()` and `Result.Fail()` return an internal **SimpleResult**
+implementation.
+`SimpleResult` is **not accessible** and **cannot be instantiated directly**.
+
+---
 
 ## RESULT<T> (GENERIC RESULT)
 
-### Use Result<T> when:
-- Returning data on success
-- Executing read or query operations
+### Use Result<T> ONLY when:
 
-### IMPORTANT RULE:
-- Result<T> is ONLY for SUCCESS cases
-- Validation or failure cases must NOT return Result<T>
+* Returning data
+* The operation is successful
 
-### EXAMPLE (SUCCESS WITH DATA):
+### RULE (STRICT)
 
-```code
-public Result<VehicleResponse> GetVehicle(Guid id)
-{
-    var vehicle = FindVehicle(id);
-    return Result<VehicleResponse>.Ok(vehicle);
-}
+> **Result<T> is ONLY for success cases.**
+
+Failure cases must return **Result**, not `Result<T>`.
+
+### SUCCESS WITH DATA
+
+```csharp
+return Result<RoleResponse>.Ok(role);
 ```
 
-### BAD PRACTICE (DO NOT DO THIS):
+### ❌ BAD PRACTICE (DO NOT DO THIS)
 
-```code
-return new Result<VehicleResponse>
+```csharp
+return new Result<RoleResponse>
 {
     Status = ResultStatus.BadRequest,
     Data = null
 };
 ```
 
+---
+
+## COLLECTION RESULTS
+
+Collection results represent **lists of data**.
+They are immutable and factory-only.
+
+---
+
 ## LISTRESULT<T>
 
 ### Use ListResult<T> when:
-- Returning a collection
-- Paging metadata is NOT required
+
+* Returning a collection
+* Paging metadata is NOT required
 
 ### Properties:
-- Items : list of data
-- TotalCount : total number of items
 
-### EXAMPLE:
+* `Items` – read-only list of data
+* `TotalCount` – total number of items
 
-```code
-return new ListResult<VehicleResponse>
-{
-    Status = ResultStatus.Success,
-    Items = vehicles,
-    TotalCount = vehicles.Count
-};
+### SUCCESS
+
+```csharp
+return ListResult<RoleResponse>.Ok(items);
 ```
 
 ### Typical use cases:
-- Dropdown data
-- Simple list endpoints
-- Master data APIs
+
+* Dropdown lists
+* Master data
+* Simple list endpoints
+
+---
 
 ## PAGEDRESULT<T>
 
 ### Use PagedResult<T> when:
-- Returning a collection WITH paging metadata
-- UI needs page information
+
+* Returning a collection WITH paging metadata
+* The UI requires paging information
 
 ### Properties:
-- Items : list of data
-- PageInfo : paging metadata
+
+* `Items` – read-only list of data
+* `PageInfo` – paging metadata
 
 ### PageInfo properties:
-- Page : current page
-- PageSize : items per page
-- TotalItems : total data count
 
-### EXAMPLE:
+* `Page` – current page
+* `PageSize` – items per page
+* `TotalItems` – total data count
+* `TotalPages` – computed safely
 
-```code
-return new PagedResult<VehicleResponse>
-{
-    Status = ResultStatus.Success,
-    Items = vehicles,
-    PageInfo = new PageInfo
-    {
-        Page = request.Paging.Page,
-        PageSize = request.Paging.PageSize,
-        TotalItems = totalCount
-    }
-};
+### SUCCESS
+
+```csharp
+return PagedResult<RoleResponse>.Ok(
+    items,
+    page,
+    pageSize,
+    totalItems);
 ```
 
-### Typical use cases:
-- Admin panels
-- Data tables
-- Search results with pagination
+### Default behavior
 
-## VALIDATIONRESULT
-ValidationResult is a specialized result type used ONLY
-for input validation errors.
+If paging information is not explicitly set:
+
+* `PageInfo.Empty` is used
+* No `null` values are exposed
+
+---
+
+## PAGEINFO SAFETY
+
+`PageInfo` is immutable and safe by default.
+
+* No `null`
+* No `default!`
+* No divide-by-zero
+
+```csharp
+public static PageInfo.Empty
+```
+
+is used as a safe fallback.
+
+---
+
+## VALIDATIONRESULT (if applicable)
+
+`ValidationResult` is a **specialized Result type** for input validation errors.
+
+### Use ValidationResult ONLY for:
+
+* Field-level validation
+* Input errors
 
 ### ValidationResult contains:
-- Status : usually BadRequest
-- Errors : list of field-level validation errors
 
-### ValidationError properties:
-- Field : name of the invalid field
-- Message : error description
+* `Status` (usually `BadRequest`)
+* `Errors` – structured field errors
 
-### EXAMPLE:
-```code
-return new ValidationResult
-{
-    Status = ResultStatus.BadRequest,
-    Errors = new[]
+### EXAMPLE
+
+```csharp
+return new ValidationResult(
+    new[]
     {
-        new ValidationError("EngineNumber", "Engine number is required"),
-        new ValidationError("Lot", "Lot must be greater than zero")
-    }
-};
+        new ValidationError("Name", "Name is required"),
+        new ValidationError("Age", "Age must be greater than zero")
+    });
 ```
 
-### IMPORTANT RULES:
-- ValidationResult is NOT generic
-- ValidationResult replaces Result<T> for invalid input
-- ValidationResult should not contain business errors
+### RULES
 
-## END-TO-END FLOW EXAMPLE
-Handler / Service example:
-```code
-public Result Handle(AddVehicleRequest request)
+* ValidationResult is NOT generic
+* ValidationResult replaces Result<T> for invalid input
+* ValidationResult does NOT represent business errors
+
+---
+
+## END-TO-END HANDLER EXAMPLE
+
+```csharp
+public async Task<Result> Handle(GetRolesQuery request)
 {
-    if (string.IsNullOrWhiteSpace(request.EngineNumber))
-    {
-        return new ValidationResult
-        {
-            Status = ResultStatus.BadRequest,
-            Errors = new[]
-            {
-                new ValidationError("EngineNumber", "Engine number is required")
-            }
-    };
-}
+    var roles = await _db.Roles.ToListAsync();
 
-var vehicle = new VehicleResponse
-{
-    Id = Guid.NewGuid(),
-    EngineNumber = request.EngineNumber
-};
+    var items = _mapper.Map<List<RoleResponse>>(roles);
 
-return Result<VehicleResponse>.Ok(vehicle);
-
+    return ListResult<RoleResponse>.Ok(items);
 }
 ```
 
-## CONTROLLER / TRANSPORT MAPPING
-Result models are independent of transport.
-```Example HTTP mapping:
-if (result.Status == Success)
-    return HTTP 200
-else if (result.Status == BadRequest)
-    return HTTP 400
-else if (result.Status == NotFound)
-    return HTTP 404
-else
-    return HTTP 500
+---
+
+## TRANSPORT / CONTROLLER MAPPING
+
+Result models are **transport-independent**.
+
+Example HTTP mapping:
+
+```text
+Success      -> 200 OK
+BadRequest   -> 400
+NotFound     -> 404
+Unauthorized -> 401
+Forbidden    -> 403
+Conflict     -> 409
+Error        -> 500
 ```
-Controller logic should not depend on Result<T> vs ValidationResult,
-only on ResultStatus.
+
+Controllers should map **ResultStatus only**,
+not inspect Result types.
+
+---
 
 ## ANTI-PATTERNS (DO NOT USE)
-- Returning Result<T> with null Data for validation errors
-- Throwing exceptions for expected validation failures
-- Mixing validation messages into generic Message strings
-- Using exceptions as flow control
+
+* ❌ `new Result()`
+* ❌ Returning `Result<T>` for failures
+* ❌ Mutating Result after creation
+* ❌ Using exceptions for expected validation failures
+* ❌ AutoMapper mapping Result objects
+
+---
 
 ## DESIGN PRINCIPLES
-- Result models represent WHAT happened, not HOW
-- Use explicit result types instead of implicit assumptions
-- Prefer predictable response shapes
-- Avoid ambiguity between success and failure responses
+
+* Result models describe **outcomes**, not flow
+* Explicit factories prevent silent bugs
+* Immutable responses are safer for teams
+* Transport concerns are always external
+
+---
 
 ## SUMMARY
 
 ### Use:
-- Result for commands without data
-- Result<T> for successful operations with data
-- ListResult<T> for collections without paging
-- PagedResult<T> for collections with paging
-- ValidationResult for structured validation errors
+
+* `Result` → commands without data
+* `Result<T>` → successful operations with data
+* `ListResult<T>` → collections without paging
+* `PagedResult<T>` → collections with paging
+* `ValidationResult` → structured validation errors
 
 ### Avoid:
-- Using Result<T> for failure cases
-- Using exceptions for normal validation flow
 
-This document exists to ensure result handling in NDB.Abstraction
-is consistent, predictable, and safe for long-term usage.
+* Instantiating Result types directly
+* Using generic results for failure cases
+* Mixing business logic into Result models
+
+---
+
+This document defines the **official contract** for result handling in
+**NDB.Abstraction** and must be followed to ensure consistency,
+clarity, and long-term maintainability.

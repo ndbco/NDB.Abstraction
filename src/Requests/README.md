@@ -1,216 +1,317 @@
-# NDB.Abstraction � Requests Guide
+﻿# NDB.Abstraction – Requests Guide (with Examples)
 
-This document explains how REQUEST models in NDB.Abstraction should be used
-in a clear, consistent, and non-ambiguous way, including practical code examples.
+This document defines the **standard request models** used in
+**NDB.Abstraction.Requests** and demonstrates **real-world usage examples**.
 
-Request models in NDB.Abstraction act as COMMUNICATION CONTRACTS between
-clients and backend services.
+Request models describe **WHAT the client wants**,
+not **HOW the query is executed**.
+
+---
 
 ## PURPOSE OF REQUEST MODELS
-Request models are used to:
-- Represent client intent (UI, API consumers, SDKs)
-- Standardize how clients request data
-- Avoid coupling to databases, ORMs, or EF Core
-- Be reusable across UI, API, and client SDKs
 
-Request models are NOT used to:
-- Write database queries
-- Implement business rules
-- Perform validation logic
-- Contain EF Core or SQL logic
+### Request models ARE used to:
 
-## CORE REQUEST TYPE
-ListRequest is a generic request contract for list-based operations.
+* Represent query intent (search, filter, sort, paging)
+* Standardize list-based requests
+* Enable reusable query pipelines
+* Keep handlers thin and predictable
 
-ListRequest supports:
-- Filtering
-- Sorting
-- Paging
+### Request models are NOT used to:
 
-Properties in ListRequest:
-- Filters : list of filter rules
-- Sorts : list of sorting rules
-- Paging : paging information
+* Execute EF or LINQ queries
+* Contain business logic
+* Perform authorization
+* Build dynamic SQL or string-based queries
+
+---
+
+## CORE DESIGN RULES
+
+> **Request models are immutable input contracts.**
+
+* Properties use `init`
+* Defaults are safe
+* No exceptions are thrown
+* Validation is external (FluentValidation / pipeline)
+
+---
+
+## LISTREQUEST (ROOT QUERY REQUEST)
+
+```csharp
+public sealed class ListRequest
+{
+    public string? Search { get; init; }
+
+    public IReadOnlyList<FilterRequest> Filters { get; init; }
+        = Array.Empty<FilterRequest>();
+
+    public IReadOnlyList<SortRequest> Sorts { get; init; }
+        = Array.Empty<SortRequest>();
+
+    public PagingRequest Paging { get; init; }
+        = new();
+}
+```
+
+### Typical JSON payload
+
+```json
+{
+  "search": "admin",
+  "filters": [
+    { "field": "Active", "value": "true", "operator": "Equals" }
+  ],
+  "sorts": [
+    { "field": "Name", "direction": "Asc" }
+  ],
+  "paging": {
+    "page": 1,
+    "pageSize": 10
+  }
+}
+```
+
+---
+
+## GLOBAL SEARCH
+
+### Purpose
+
+* Performs keyword search across multiple fields
+* Fields are defined by **whitelist** in application layer
+
+### Example
+
+```json
+{
+  "search": "administrator"
+}
+```
+
+---
 
 ## FILTERREQUEST
 
-FilterRequest represents a single filtering rule sent by the client.
+```csharp
+public sealed class FilterRequest
+{
+    public string Field { get; init; } = string.Empty;
+    public string Value { get; init; } = string.Empty;
+    public FilterOperator Operator { get; init; }
+        = FilterOperator.Contains;
+}
+```
 
-Properties:
-- Field : logical field name (not necessarily a database column)
-- Value : value to be matched
-- Operator : comparison operator
+### FilterOperator values
 
-Supported operators:
-- Equals
-- Contains
-- StartsWith
-- EndsWith
-- GreaterThan
-- LessThan
+* `Equals`
+* `Contains`
+* `StartsWith`
+* `EndsWith`
+* `GreaterThan`
+* `LessThan`
 
-Example FilterRequest (conceptual):
-Field = "EngineNumber"
-Value = "ABC"
-Operator = Contains
+### Example
 
+```json
+{
+  "filters": [
+    { "field": "Code", "value": "ADM", "operator": "StartsWith" }
+  ]
+}
+```
+
+---
 
 ## SORTREQUEST
 
-SortRequest defines how the result should be ordered.
+```csharp
+public sealed class SortRequest
+{
+    public string Field { get; init; } = string.Empty;
+    public SortDirection Direction { get; init; }
+        = SortDirection.Asc;
+}
+```
 
-Properties:
-- Field : logical field name
-- Direction : Asc or Desc
+### SortDirection values
+
+* `Asc`
+* `Desc`
+
+### Example
+
+```json
+{
+  "sorts": [
+    { "field": "CreatedDate", "direction": "Desc" }
+  ]
+}
+```
+
+---
 
 ## PAGINGREQUEST
 
-PagingRequest defines how result data should be paged.
-
-Properties:
-- Page : page number (default 1)
-- PageSize : number of items per page (default 20)
-
-## OFFICIAL USAGE PATTERNS
-
-There are TWO OFFICIAL request usage patterns.
-Choose ONE pattern per endpoint.
-DO NOT mix these patterns without explicit rules.
-
-### PATTERN A � GENERIC FILTERING (ADMIN / ENTERPRISE)
-
-Use this pattern when:
-- Filter fields are dynamic
-- Used by admin panels or data tables
-- Flexibility is required
-
-```REQUEST DTO (C#):
-using NDB.Abstraction.Requests;
-
-public class SearchVehicleRequest : ListRequest
+```csharp
+public sealed class PagingRequest
 {
-	// No strongly-typed filter properties
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = 20;
 }
 ```
 
-```EXAMPLE JSON REQUEST:
+### Example
+
+```json
 {
-	"filters": [
-			{ "field": "EngineNumber", "value": "ABC", "operator": "Contains" },
-			{ "field": "Status", "value": "ORDER", "operator": "Equals" }
-		],
-	"sorts": [
-		{ "field": "CreatedDate", "direction": "Desc" }
-	],
-	"paging": {
-		"page": 1,
-		"pageSize": 20
-	}
+  "paging": {
+    "page": 2,
+    "pageSize": 25
+  }
 }
 ```
 
-```BACKEND USAGE EXAMPLE (PSEUDO-CODE):
-foreach (filter in request.Filters)
+---
+
+## END-TO-END QUERY EXAMPLE
+
+### 1️⃣ Client Request (JSON)
+
+```json
 {
-	//apply filter.Field, filter.Operator, filter.Value to query
-}
-//apply sorting from request.Sorts
-//apply paging from request.Paging
-```
-
-#### ADVANTAGES:
-- Highly flexible
-- No DTO changes when new fields are added
-- Ideal for enterprise systems
-
-#### DISADVANTAGES:
-- Not strongly typed
-- Less explicit in Swagger documentation
-
-### PATTERN B � STRONGLY TYPED REQUEST (SIMPLE / PUBLIC API)
-
-Use this pattern when:
-- Search criteria are fixed
-- API is public or simple
-- Clarity is more important than flexibility
-
-```REQUEST DTO (C#):
-public class SearchVehicleRequest :PagingRequest
-{
-	public string? EngineNumber { get; set; }
+  "search": "admin",
+  "filters": [
+    { "field": "Active", "value": "true", "operator": "Equals" }
+  ],
+  "sorts": [
+    { "field": "Name", "direction": "Asc" }
+  ],
+  "paging": {
+    "page": 1,
+    "pageSize": 10
+  }
 }
 ```
 
-```EXAMPLE JSON REQUEST:
+---
+
+### 2️⃣ Handler Usage
+
+```csharp
+public async Task<Result> Handle(
+    GetRoleListRequest request,
+    CancellationToken ct)
 {
-	"engineNumber": "ABC",
-	"page": 1,
-	"pageSize": 20
+    return await _db.ROLE
+        .ReadOnly()
+        .ApplySearch(
+            request.Search,
+            RoleQueryMap.SearchableFields)
+        .ApplyFilters(
+            request.Filters,
+            RoleQueryMap.AllowedFilters)
+        .ApplySorts(
+            request.Sorts,
+            RoleQueryMap.AllowedSorts)
+        .ToPagedResultAsync<Role, RoleResponse>(
+            request.Paging,
+            _mapper,
+            ct);
 }
 ```
 
-```BACKEND USAGE EXAMPLE (C#):
-var query = vehicles;
+---
 
-if (!string.IsNullOrEmpty(request.EngineNumber))
+### 3️⃣ Response (PagedResult)
+
+```json
 {
-	query = query.Where(x => x.EngineNumber.Contains(request.EngineNumber));
-}
-
-var result = query
-.Skip((request.Page - 1) * request.PageSize)
-.Take(request.PageSize)
-.ToList();
-```
-
-#### ADVANTAGES:
-- Clear and explicit
-- Type-safe
-- Easy to document
-
-#### DISADVANTAGES:
-- Less flexible
-- DTO changes required when fields change
-
-## ANTI-PATTERN (DO NOT USE)
-
-DO NOT create request models that:
-Inherit from ListRequest AND Declare strongly-typed filter properties
-
-```Example of BAD DESIGN:
-
-public class SearchVehicleRequest : ListRequest
-{
-	public string? EngineNumber { get; set; }
+  "status": "Success",
+  "message": "OK",
+  "items": [
+    {
+      "id": "1",
+      "code": "ADM",
+      "name": "Administrator"
+    }
+  ],
+  "pageInfo": {
+    "page": 1,
+    "pageSize": 10,
+    "totalItems": 1,
+    "totalPages": 1
+  }
 }
 ```
 
-Why this is bad:
-- Redundant
-- Ambiguous
-- Developers do not know which filter takes precedence
-- API documentation becomes unclear
+---
 
-If this pattern is ever used, explicit rules MUST be documented, such as:
-Filters override strongly-typed properties
-OR
-Strongly-typed properties act only as shortcuts when Filters are empty
-Without explicit rules, this pattern MUST be avoided.
+## VALIDATION STRATEGY
+
+Validation is handled **outside request models**.
+
+### Example (FluentValidation)
+
+```csharp
+RuleFor(x => x.Paging.Page).GreaterThan(0);
+RuleFor(x => x.Paging.PageSize).LessThanOrEqualTo(100);
+```
+
+Invalid requests:
+
+* Do not execute handlers
+* Return ValidationResult early
+
+---
+
+## SECURITY CONSIDERATIONS
+
+* Field names are validated via whitelist
+* No dynamic SQL or LINQ execution
+* Expression trees are used for queries
+* Invalid filters or sorts are ignored safely
+
+---
+
+## ANTI-PATTERNS (DO NOT USE)
+
+* ❌ Executing EF queries inside Request
+* ❌ Using dynamic string-based LINQ
+* ❌ Trusting client-provided field names blindly
+* ❌ Mutating Request objects
+
+---
 
 ## DESIGN PRINCIPLES
-- Requests describe WHAT the client wants
-- Requests do NOT describe HOW the backend works
-- One endpoint equals one request pattern
-- Prefer clarity over flexibility when in doubt
+
+* Requests represent **intent**
+* Queries are explicit and controlled
+* Handlers remain thin
+* Abstractions are stable and reusable
+
+---
 
 ## SUMMARY
 
 ### Use:
-- Generic Filtering for admin and enterprise UIs
-- Strongly Typed Requests for simple and public APIs
+
+* `ListRequest` for list queries
+* `Search` for keyword search
+* `FilterRequest` for structured filtering
+* `SortRequest` for ordering
+* `PagingRequest` for pagination
 
 ### Avoid:
-- Mixing strongly-typed properties with Filters without clear rules
 
-This document exists to ensure request models in NDB.Abstraction
-are used consistently, predictably, and safely over time.
+* Mixing request and query logic
+* Dynamic string-based queries
+* Mutable request objects
+
+---
+
+This document defines the **official request contract**
+for **NDB.Abstraction.Requests** and ensures consistent,
+secure, and scalable query handling across the system.

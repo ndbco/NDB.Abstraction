@@ -1,9 +1,12 @@
 ﻿namespace NDB.Abstraction.Requests;
 
-public class SortRequest
+public sealed class SortRequest
 {
-    public string Field { get; set; } = default!;
-    public SortDirection Direction { get; set; } = SortDirection.Asc;
+    public string Field { get; init; } = string.Empty;
+    public SortDirection Direction { get; init; } = SortDirection.Asc;
+
+    public bool IsValid =>
+        !string.IsNullOrWhiteSpace(Field);
 }
 
 public enum SortDirection

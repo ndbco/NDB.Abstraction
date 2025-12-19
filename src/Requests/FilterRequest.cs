@@ -1,10 +1,13 @@
 ﻿namespace NDB.Abstraction.Requests;
 
-public class FilterRequest
+public sealed class FilterRequest
 {
-    public string Field { get; set; } = default!;
-    public string Value { get; set; } = default!;
-    public FilterOperator Operator { get; set; } = FilterOperator.Contains;
+    public string Field { get; init; } = string.Empty;
+    public string Value { get; init; } = string.Empty;
+    public FilterOperator Operator { get; init; } = FilterOperator.Contains;
+    public bool IsValid =>
+        !string.IsNullOrWhiteSpace(Field) &&
+        !string.IsNullOrWhiteSpace(Value);
 }
 
 public enum FilterOperator
