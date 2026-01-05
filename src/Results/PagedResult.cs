@@ -20,4 +20,43 @@ public sealed class PagedResult<T> : CollectionResult<T>
             PageInfo = PageInfo.Create(page, pageSize, totalItems)
         };
     }
+    public static new PagedResult<T> BadRequest(string message)
+      => new()
+      {
+          Status = ResultStatus.BadRequest,
+          PageInfo = PageInfo.Create(0,0,0),
+          Message = message
+      };
+
+    public static new PagedResult<T> Unauthorized(string message)
+      => new()
+      {
+          Status = ResultStatus.Unauthorized,
+          PageInfo = PageInfo.Create(0, 0, 0),
+          Message = message
+      };
+
+    public static new PagedResult<T> NotFound(string message)
+      => new()
+      {
+          Status = ResultStatus.NotFound,
+          PageInfo = PageInfo.Create(0, 0, 0),
+          Message = message
+      };
+
+    public static new PagedResult<T> Error(string message)
+      => new()
+      {
+          Status = ResultStatus.Error,
+          PageInfo = PageInfo.Create(0, 0, 0),
+          Message = message
+      };
+
+    public static new PagedResult<T> Fail(ResultStatus status, string message)
+      => new()
+      {
+          Status = status,
+          PageInfo = PageInfo.Create(0, 0, 0),
+          Message = message
+      };
 }
