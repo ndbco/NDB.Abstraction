@@ -13,4 +13,38 @@ public sealed class Result<T> : Result
             Data = data,
             Message = message
         };
+    public static new Result<T> BadRequest(string message)
+      => new()
+      {
+          Status = ResultStatus.BadRequest,
+          Message = message
+      };
+
+    public static new Result<T> Unauthorized(string message)
+      => new()
+      {
+          Status = ResultStatus.Unauthorized,
+          Message = message
+      };
+
+    public static new Result<T> NotFound(string message)
+      => new()
+      {
+          Status = ResultStatus.NotFound,
+          Message = message
+      };
+
+    public static new Result<T> Error(string message)
+      => new()
+      {
+          Status = ResultStatus.Error,
+          Message = message
+      };
+
+    public static new Result<T> Fail(ResultStatus status, string message)
+      => new()
+      {
+          Status = status,
+          Message = message
+      };
 }
